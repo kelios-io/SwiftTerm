@@ -99,10 +99,15 @@ extension TerminalView {
     {
         resetCaches()
         self.cellDimension = computeFontDimensions ()
-        let newCols = Int(frame.width / cellDimension.width)
-        let newRows = Int(frame.height / cellDimension.height)
-        resize(cols: newCols, rows: newRows)
+        // Go through the ordinary size-change path, not resize(cols:rows:): that one soft-resets
+        // the terminal, which would un-hide the cursor, drop application-cursor mode and clear the
+        // scroll margins of whatever program is running. It also measures the width the scroller
+        // leaves, which resize(cols:rows:) callers had to remember themselves.
+        processSizeChange(newSize: frame.size)
         updateCaretView()
+        updateCursorPosition()
+        terminal.updateFullScreen()
+        queuePendingDisplay()
     }
     
     func updateCaretView ()
