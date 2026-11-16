@@ -1578,15 +1578,22 @@ extension TerminalView {
         terminal.clearUpdateRange ()
                 
         #if os(macOS)
+        // The update range counts rows from the top of the live screen (yBase), but the view draws
+        // from yDisp. Once the user scrolls back even one line the two differ, and an unshifted
+        // range invalidates the wrong rows: the changed line stays stale while the caret, a
+        // separate subview, still moves.
+        let viewShift = terminal.buffer.yBase - terminal.displayBuffer.yDisp
+        let viewStart = rowStart + viewShift
+        let viewEnd = rowEnd + viewShift
         let baseLine = frame.height
         var region = CGRect (x: 0,
-                             y: baseLine - (cellDimension.height + CGFloat(rowEnd) * cellDimension.height),
+                             y: baseLine - (cellDimension.height + CGFloat(viewEnd) * cellDimension.height),
                              width: frame.width,
-                             height: CGFloat(rowEnd-rowStart + 1) * cellDimension.height)
+                             height: CGFloat(viewEnd-viewStart + 1) * cellDimension.height)
         
         // If we are the last line, we should also queue a refresh for the "remaining" bits at the
         // end which can be redrawn by large unicode
-        if rowEnd == terminal.rows - 1 {
+        if viewEnd >= terminal.rows - 1 {
             let oh = region.height
             let oy = region.origin.y
             region = CGRect (x: 0, y: 0, width: frame.width, height: oh + oy)
@@ -1601,8 +1608,8 @@ extension TerminalView {
                 let visibleStart = buffer.yDisp
                 let visibleEnd = min(maxRow, buffer.yDisp + buffer.rows - 1)
                 if rowStart >= 0 && rowEnd >= rowStart && rowEnd < terminal.rows {
-                    let absStart = buffer.yDisp + rowStart
-                    let absEnd = buffer.yDisp + rowEnd
+                    let absStart = terminal.buffer.yBase + rowStart
+                    let absEnd = terminal.buffer.yBase + rowEnd
                     let clampedStart = max(0, min(absStart, maxRow))
                     let clampedEnd = max(0, min(absEnd, maxRow))
                     if clampedStart <= clampedEnd {
