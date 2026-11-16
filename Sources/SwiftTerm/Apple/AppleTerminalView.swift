@@ -191,7 +191,7 @@ extension TerminalView {
         let lineAscent = CTFontGetAscent (fontSet.normal)
         let lineDescent = CTFontGetDescent (fontSet.normal)
         let lineLeading = CTFontGetLeading (fontSet.normal)
-        let cellHeight = ceil(lineAscent + lineDescent + lineLeading)
+        let cellHeight = ceil((lineAscent + lineDescent + lineLeading) * max(0.5, lineHeightMultiplier))
         #if os(macOS)
         // The following is a more robust way of getting the largest ascii character width, but comes with a performance hit.
         // See: https://github.com/migueldeicaza/SwiftTerm/issues/286
@@ -215,6 +215,19 @@ extension TerminalView {
         let snappedWidth = ceil(cellWidth * scale) / scale
         let snappedHeight = ceil(cellHeight * scale) / scale
         return CellDimension(width: max(1, snappedWidth), height: max(min(snappedHeight, 8192), 1))
+    }
+
+    /// Distance from the bottom of a cell to the glyph baseline. Any height the line-height
+    /// multiplier adds is split evenly above and below the glyph, snapped to the pixel grid, so
+    /// text stays centred. Every renderer and the caret must use this one value or they disagree.
+    func glyphBaselineOffset () -> CGFloat
+    {
+        let lineDescent = CTFontGetDescent (fontSet.normal)
+        let lineLeading = CTFontGetLeading (fontSet.normal)
+        let naturalHeight = ceil (CTFontGetAscent (fontSet.normal) + lineDescent + lineLeading)
+        let scale = backingScaleFactor ()
+        let extra = cellDimension.height - naturalHeight
+        return ceil (lineDescent + lineLeading) + (extra / 2 * scale).rounded (.down) / scale
     }
     
     func mapColor (color: Attribute.Color, isFg: Bool, isBold: Bool, useBrightColors: Bool = true) -> TTColor
@@ -1132,9 +1145,7 @@ extension TerminalView {
     // TODO: this should not render any lines outside the dirtyRect
     func drawTerminalContents (dirtyRect: TTRect, context: CGContext, bufferOffset: Int)
     {
-        let lineDescent = CTFontGetDescent(fontSet.normal)
-        let lineLeading = CTFontGetLeading(fontSet.normal)
-        let yOffset = ceil(lineDescent+lineLeading)
+        let yOffset = glyphBaselineOffset()
         let displayBuffer = terminal.displayBuffer
 
         func calcLineOffset (forRow: Int) -> CGFloat {

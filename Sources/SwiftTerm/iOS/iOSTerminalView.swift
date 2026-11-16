@@ -267,6 +267,17 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
             selectNone()
         }
     }
+
+    /// Multiplies the font's natural line height; 1.0 keeps the font's own metrics. Glyphs stay
+    /// centred in the taller cell while box-drawing and block characters still fill the whole
+    /// cell, so TUI borders stay joined. Changing it recomputes the grid and resizes the PTY.
+    public var lineHeightMultiplier: CGFloat = 1.0 {
+        didSet {
+            guard lineHeightMultiplier != oldValue else { return }
+            resetFont()
+            setNeedsDisplay(bounds)
+        }
+    }
     
     /// Sets the various fonts to be used by the terminal to render text, their size is ignored
     /// - Parameters:

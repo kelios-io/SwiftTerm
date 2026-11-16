@@ -562,7 +562,7 @@ final class MetalTerminalRenderer: NSObject, MTKViewDelegate {
         let cellHeight = terminalView.cellDimension.height
         let lineDescent = CTFontGetDescent(terminalView.fontSet.normal)
         let lineLeading = CTFontGetLeading(terminalView.fontSet.normal)
-        let yOffset = ceil(lineDescent + lineLeading)
+        let yOffset = terminalView.glyphBaselineOffset()
         let viewWidthPx = terminalView.bounds.width * scale
 
         let rowInfo = visibleRowRange(buffer: buffer, cellHeight: cellHeight, terminalView: terminalView)
@@ -2145,7 +2145,7 @@ final class MetalTerminalRenderer: NSObject, MTKViewDelegate {
         guard let runs = CTLineGetGlyphRuns(ctline) as? [CTRun] else {
             return (colorVertices, [], [])
         }
-        let yOffset = ceil(lineDescent + lineLeading)
+        let yOffset = terminalView.glyphBaselineOffset()
         let textColorSIMD = colorToSIMD(caretTextColor)
         let baseX = lineOrigin.x + cellWidth * doublePosition * CGFloat(buffer.x)
 

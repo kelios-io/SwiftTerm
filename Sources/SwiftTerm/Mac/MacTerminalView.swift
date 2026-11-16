@@ -179,6 +179,17 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
         }
     }
     
+    /// Multiplies the font's natural line height; 1.0 keeps the font's own metrics. Glyphs stay
+    /// centred in the taller cell while box-drawing and block characters still fill the whole
+    /// cell, so TUI borders stay joined. Changing it recomputes the grid and resizes the PTY.
+    public var lineHeightMultiplier: CGFloat = 1.0 {
+        didSet {
+            guard lineHeightMultiplier != oldValue else { return }
+            resetFont()
+            needsDisplay = true
+        }
+    }
+
     public init(frame: CGRect, font: NSFont?) {
         self.fontSet = FontSet (font: font ?? FontSet.defaultFont)
 
