@@ -510,7 +510,41 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
         }
     }
 
-    let scrollerStyle: NSScroller.Style = .legacy
+    /// How the vertical scroller is shown.
+    public enum ScrollerMode {
+        /// A legacy scroller with its own track, which takes width away from the grid. The default.
+        case legacy
+        /// An overlay scroller drawn over the right edge of the grid, which takes no width.
+        case overlay
+        /// No scroller and no reserved width. Wheel and trackpad scrolling still work.
+        case hidden
+    }
+
+    /// How the vertical scroller is shown. Changing it re-measures the grid, so the PTY learns
+    /// the new column count when the reserved width changes.
+    public var scrollerMode: ScrollerMode = .legacy {
+        didSet {
+            guard scrollerMode != oldValue else { return }
+            setupScroller()
+            if cellDimension != nil {
+                processSizeChange(newSize: frame.size)
+            }
+            needsDisplay = true
+        }
+    }
+
+    /// Whether a scroller is shown. Setting it chooses an overlay scroller or none, so the grid
+    /// never loses width to it; the default `.legacy` mode reads as true.
+    public var showsScroller: Bool {
+        get { scrollerMode != .hidden }
+        set { scrollerMode = newValue ? .overlay : .hidden }
+    }
+
+    var scrollerStyle: NSScroller.Style {
+        scrollerMode == .legacy ? .legacy : .overlay
+    }
+
+    private var scrollerWidthConstraint: NSLayoutConstraint?
 
     func getScrollerFrame() -> CGRect {
         let scrollerWidth = NSScroller.scrollerWidth(for: .regular, scrollerStyle: scrollerStyle)
@@ -526,13 +560,17 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
 
             // Use Auto Layout to position the scroller. This ensures correct layout
             // whether the parent view uses frame-based or constraint-based layout.
+            let widthConstraint = scroller.widthAnchor.constraint(equalToConstant: scrollerWidth)
+            scrollerWidthConstraint = widthConstraint
             NSLayoutConstraint.activate([
                 scroller.trailingAnchor.constraint(equalTo: trailingAnchor),
                 scroller.topAnchor.constraint(equalTo: topAnchor),
                 scroller.bottomAnchor.constraint(equalTo: bottomAnchor),
-                scroller.widthAnchor.constraint(equalToConstant: scrollerWidth)
+                widthConstraint
             ])
         }
+        scrollerWidthConstraint?.constant = scrollerWidth
+        scroller.isHidden = scrollerMode == .hidden
         scroller.scrollerStyle = scrollerStyle
         scroller.knobProportion = 0.1
         scroller.isEnabled = false
@@ -567,17 +605,22 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
         NSScroller.scrollerWidth(for: .regular, scrollerStyle: scrollerStyle)
     }
 
+    /// The width the grid gives up to the scroller. Only a legacy scroller has a track of its own.
+    private var reservedScrollerWidth: CGFloat {
+        scrollerMode == .legacy ? scrollerWidth : 0
+    }
+
     /**
      * Given the current set of columns and rows returns a frame that would host this control.
      */
     open func getOptimalFrameSize () -> NSRect
     {
-        return NSRect (x: 0, y: 0, width: cellDimension.width * CGFloat(terminal.cols) + scrollerWidth, height: cellDimension.height * CGFloat(terminal.rows))
+        return NSRect (x: 0, y: 0, width: cellDimension.width * CGFloat(terminal.cols) + reservedScrollerWidth, height: cellDimension.height * CGFloat(terminal.rows))
     }
 
     func getEffectiveWidth (size: CGSize) -> CGFloat
     {
-        return (size.width - scrollerWidth)
+        return (size.width - reservedScrollerWidth)
     }
     
     open func scrolled(source terminal: Terminal, yDisp: Int) {
