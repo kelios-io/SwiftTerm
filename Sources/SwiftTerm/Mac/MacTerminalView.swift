@@ -142,7 +142,7 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     private var lastProgressValue: UInt8?
 
     var selection: SelectionService!
-    private var scroller: NSScroller!
+    private var scroller: TerminalScroller!
     
     // Attribute dictionary, maps a console attribute (color, flags) to the corresponding dictionary
     // of attributes for an NSAttributedString
@@ -526,8 +526,11 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     public enum ScrollerMode {
         /// A legacy scroller with its own track, which takes width away from the grid. The default.
         case legacy
-        /// An overlay scroller drawn over the right edge of the grid, which takes no width.
-        case overlay
+        /// A slim rounded knob with no track, in a strip of `slimScrollerWidth` that the grid gives
+        /// up, so text never sits under it. The knob shows while the viewport scrolls or the
+        /// pointer is over the strip and fades out about a second later; with nothing to scroll it
+        /// stays hidden.
+        case slim
         /// No scroller and no reserved width. Wheel and trackpad scrolling still work.
         case hidden
     }
@@ -540,33 +543,107 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
             setupScroller()
             if cellDimension != nil {
                 processSizeChange(newSize: frame.size)
+                updateScroller()
             }
             needsDisplay = true
         }
     }
 
-    /// Whether a scroller is shown. Setting it chooses an overlay scroller or none, so the grid
-    /// never loses width to it; the default `.legacy` mode reads as true.
+    /// Whether a scroller is shown. Setting it chooses the slim scroller or none; the default
+    /// `.legacy` mode reads as true.
     public var showsScroller: Bool {
         get { scrollerMode != .hidden }
-        set { scrollerMode = newValue ? .overlay : .hidden }
+        set { scrollerMode = newValue ? .slim : .hidden }
     }
 
-    var scrollerStyle: NSScroller.Style {
-        scrollerMode == .legacy ? .legacy : .overlay
+    /// The width of the strip the slim scroller takes from the grid.
+    public static let slimScrollerWidth: CGFloat = 10
+
+    /// The width the grid gives up to the scroller in the current mode: the system legacy
+    /// scroller width, `slimScrollerWidth`, or 0 when hidden.
+    public var scrollerReservedWidth: CGFloat {
+        reservedScrollerWidth
+    }
+
+    /// The slim scroller's knob colour. Nil uses the foreground colour at low alpha.
+    public var scrollerKnobColor: NSColor? {
+        didSet { scroller?.needsDisplay = true }
+    }
+
+    /// A subclass that draws its own knob is never given overlay behaviour by AppKit, so both
+    /// modes use the legacy style; the slim mode replaces the drawing.
+    var scrollerStyle: NSScroller.Style { .legacy }
+
+    /// Whether the slim knob is showing or fading in. Kept apart from the animated alpha so the
+    /// state is exact even mid-animation.
+    private(set) var slimScrollerVisible = false
+    private var slimScrollerHovered = false
+    private var slimScrollerFade: DispatchWorkItem?
+    private var lastScrollerDisp = 0
+    private var lastScrollerAtBottom = true
+    static let slimScrollerFadeDelay: TimeInterval = 1.0
+
+    private func setSlimScrollerVisible(_ visible: Bool, animated: Bool = true) {
+        guard let scroller else { return }
+        slimScrollerVisible = visible
+        let alpha: CGFloat = visible ? 1 : 0
+        if animated && window != nil {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = visible ? 0.12 : 0.3
+                scroller.animator().alphaValue = alpha
+            }
+        } else {
+            scroller.alphaValue = alpha
+        }
+    }
+
+    /// Shows the slim knob and fades it out after the delay, unless the pointer is on it.
+    func revealSlimScroller() {
+        guard scrollerMode == .slim, canScroll else { return }
+        if !slimScrollerVisible {
+            setSlimScrollerVisible(true)
+        }
+        scheduleSlimScrollerFade()
+    }
+
+    private func scheduleSlimScrollerFade() {
+        slimScrollerFade?.cancel()
+        guard !slimScrollerHovered else { return }
+        let fade = DispatchWorkItem { [weak self] in
+            guard let self, !self.slimScrollerHovered else { return }
+            self.setSlimScrollerVisible(false)
+        }
+        slimScrollerFade = fade
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.slimScrollerFadeDelay, execute: fade)
     }
 
     private var scrollerWidthConstraint: NSLayoutConstraint?
 
     func getScrollerFrame() -> CGRect {
-        let scrollerWidth = NSScroller.scrollerWidth(for: .regular, scrollerStyle: scrollerStyle)
         return NSRect(x: bounds.maxX - scrollerWidth, y: 0, width: scrollerWidth, height: bounds.height)
     }
 
     func setupScroller()
     {
         if scroller == nil {
-            scroller = NSScroller(frame: .zero)
+            scroller = TerminalScroller(frame: .zero)
+            scroller.knobColor = { [weak self] in
+                guard let self else { return .secondaryLabelColor }
+                return self.scrollerKnobColor ?? self.nativeForegroundColor.withAlphaComponent(0.3)
+            }
+            scroller.onHoverChanged = { [weak self] inside in
+                guard let self, self.scrollerMode == .slim else { return }
+                self.slimScrollerHovered = inside
+                if inside {
+                    self.revealSlimScroller()
+                } else {
+                    self.scheduleSlimScrollerFade()
+                }
+            }
+            scroller.onTrackingFinished = { [weak self] in
+                guard let self, self.scrollerMode == .slim else { return }
+                self.scheduleSlimScrollerFade()
+            }
             scroller.translatesAutoresizingMaskIntoConstraints = false
             addSubview(scroller)
 
@@ -583,6 +660,9 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
         }
         scrollerWidthConstraint?.constant = scrollerWidth
         scroller.isHidden = scrollerMode == .hidden
+        scroller.isSlim = scrollerMode == .slim
+        slimScrollerFade?.cancel()
+        setSlimScrollerVisible(scrollerMode != .slim, animated: false)
         scroller.scrollerStyle = scrollerStyle
         scroller.knobProportion = 0.1
         scroller.isEnabled = false
@@ -614,12 +694,11 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     }
         
     private var scrollerWidth: CGFloat {
-        NSScroller.scrollerWidth(for: .regular, scrollerStyle: scrollerStyle)
+        scrollerMode == .slim ? Self.slimScrollerWidth : NSScroller.scrollerWidth(for: .regular, scrollerStyle: scrollerStyle)
     }
 
-    /// The width the grid gives up to the scroller. Only a legacy scroller has a track of its own.
     private var reservedScrollerWidth: CGFloat {
-        scrollerMode == .legacy ? scrollerWidth : 0
+        scrollerMode == .hidden ? 0 : scrollerWidth
     }
 
     /**
@@ -684,6 +763,31 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
         scroller.isEnabled = canScroll
         scroller.doubleValue = scrollPosition
         scroller.knobProportion = scrollThumbsize
+        updateSlimScrollerVisibility()
+    }
+
+    /// Reveals the slim knob when the viewport moves. Output that keeps the view pinned to the
+    /// bottom moves yDisp on every new line, so that alone does not count, or a streaming
+    /// program would keep the knob lit.
+    private func updateSlimScrollerVisibility() {
+        let displayBuffer = terminal.displayBuffer
+        let disp = displayBuffer.yDisp
+        let atBottom = disp >= displayBuffer.yBase
+        defer {
+            lastScrollerDisp = disp
+            lastScrollerAtBottom = atBottom
+        }
+        guard scrollerMode == .slim else { return }
+        guard canScroll else {
+            slimScrollerFade?.cancel()
+            if slimScrollerVisible {
+                setSlimScrollerVisible(false, animated: false)
+            }
+            return
+        }
+        if disp != lastScrollerDisp && !(atBottom && lastScrollerAtBottom) {
+            revealSlimScroller()
+        }
     }
     
     var userScrolling = false
