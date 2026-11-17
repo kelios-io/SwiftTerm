@@ -954,7 +954,23 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     // doCommand/noop: - but more research needs to take place to figure out the priority
     // of those keys.
     //
+    /// Sees every key press before the terminal encodes it. Return true when the event is handled,
+    /// and the terminal does nothing with it. Command keys arrive through `performKeyEquivalent`
+    /// (only while this view is first responder), since AppKit never sends most of them to
+    /// `keyDown`; an event declined there can reach the interceptor again through `keyDown`.
+    public var keyEventInterceptor: ((NSEvent) -> Bool)?
+
+    public override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if window?.firstResponder === self, let keyEventInterceptor, keyEventInterceptor(event) {
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
     public override func keyDown(with event: NSEvent) {
+        if let keyEventInterceptor, keyEventInterceptor(event) {
+            return
+        }
         selection.active = false
         let eventFlags = event.modifierFlags
 
