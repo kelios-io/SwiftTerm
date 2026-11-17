@@ -259,6 +259,12 @@ extension TerminalView {
             } else {
                 midx = ansi > 7 ? (Int (ansi) - 8) : Int(ansi)
             }
+            // The caches are keyed by colour alone, but a transform may treat foreground and
+            // background differently, so it skips them; the per-attribute cache above this still
+            // keeps the transform off the hot path.
+            if let colorTransform {
+                return Self.makeColor (colorTransform (terminal.ansiColors [midx], isFg))
+            }
             if let c = colors [midx] {
                 return c
             }
@@ -267,6 +273,10 @@ extension TerminalView {
             colors [midx] = newColor
             return newColor
         case .trueColor(let r, let g, let b):
+            if let colorTransform {
+                let source = Color (red: UInt16 (r) * 257, green: UInt16 (g) * 257, blue: UInt16 (b) * 257)
+                return Self.makeColor (colorTransform (source, isFg))
+            }
             if let tc = trueColors [color] {
                 return tc
             }
@@ -278,6 +288,16 @@ extension TerminalView {
             trueColors [color] = newColor
             return newColor
         }
+    }
+
+    /// Builds a native colour the same way the 24-bit path does, so a transformed colour that
+    /// returns its input unchanged renders identically.
+    static func makeColor (_ color: Color) -> TTColor
+    {
+        TTColor.make (red: CGFloat (color.red) / 65535.0,
+                      green: CGFloat (color.green) / 65535.0,
+                      blue: CGFloat (color.blue) / 65535.0,
+                      alpha: 1.0)
     }
 
     func nsUnderlineStyle(_ style: UnderlineStyle) -> NSUnderlineStyle {

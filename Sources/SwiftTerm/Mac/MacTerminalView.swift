@@ -190,6 +190,18 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
         }
     }
 
+    /// Rewrites palette and 24-bit cell colours as they are drawn, by both renderers. Unlike
+    /// rewriting the program's output, it applies to everything already on screen and in the
+    /// scrollback, so changing it recolours the whole terminal. The default foreground and
+    /// background are not passed through it; set `nativeForegroundColor` and
+    /// `nativeBackgroundColor` for those. Setting it clears the colour caches and redraws.
+    public var colorTransform: ((Color, _ isForeground: Bool) -> Color)? {
+        didSet {
+            resetCaches()
+            colorsChanged()
+        }
+    }
+
     public init(frame: CGRect, font: NSFont?) {
         self.fontSet = FontSet (font: font ?? FontSet.defaultFont)
 

@@ -279,6 +279,18 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
         }
     }
     
+    /// Rewrites palette and 24-bit cell colours as they are drawn, by both renderers. Unlike
+    /// rewriting the program's output, it applies to everything already on screen and in the
+    /// scrollback, so changing it recolours the whole terminal. The default foreground and
+    /// background are not passed through it; set `nativeForegroundColor` and
+    /// `nativeBackgroundColor` for those. Setting it clears the colour caches and redraws.
+    public var colorTransform: ((Color, _ isForeground: Bool) -> Color)? {
+        didSet {
+            resetCaches()
+            colorsChanged()
+        }
+    }
+
     /// Sets the various fonts to be used by the terminal to render text, their size is ignored
     /// - Parameters:
     ///  - normal: The font used by default for most text
