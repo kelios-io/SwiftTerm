@@ -2473,6 +2473,10 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
 // Default implementations for TerminalViewDelegate
 
 extension TerminalViewDelegate {
+    public func notify (source: TerminalView, title: String, body: String)
+    {
+    }
+
     public func requestOpenLink (source: TerminalView, link: String, params: [String:String])
     {
         if let url = URL(string: link) {

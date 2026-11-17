@@ -523,7 +523,7 @@ public class EscapeSequenceParser {
         case 7:    terminal.oscSetCurrentDirectory(data)
         case 8:    terminal.oscHyperlink(data)
         case 9:
-            if !terminal.oscProgressReport(data) {
+            if !terminal.oscProgressReport(data) && !terminal.oscPlainNotification(data) {
                 oscHandlerFallback(code, data)
             }
         case 10:   terminal.oscSetColors(data, startAt: 0)

@@ -88,5 +88,11 @@ public protocol TerminalViewDelegate: AnyObject {
      */
     func rangeChanged (source: TerminalView, startY: Int, endY: Int)
 
+    /**
+     * The program asked for a desktop notification, with OSC 777 (`notify;title;body`) or a plain
+     * OSC 9 message (iTerm2 style, which has no title, so `title` is empty). OSC 9;4 progress
+     * reports are not notifications and do not arrive here. The default does nothing.
+     */
+    func notify (source: TerminalView, title: String, body: String)
 }
 #endif

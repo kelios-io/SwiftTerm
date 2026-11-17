@@ -336,6 +336,11 @@ extension TerminalView {
         colorsChanged ()
     }
 
+    public func notify (source: Terminal, title: String, body: String)
+    {
+        terminalDelegate?.notify (source: self, title: title, body: body)
+    }
+
     public func synchronizedOutputChanged (source: Terminal, active: Bool)
     {
         updateScroller()

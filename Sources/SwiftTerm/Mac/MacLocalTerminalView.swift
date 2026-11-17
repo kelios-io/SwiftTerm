@@ -142,6 +142,11 @@ open class LocalProcessTerminalView: TerminalView, TerminalViewDelegate, LocalPr
     }
     
     /// Implementation of the TerminalViewDelegate method
+    /// Desktop notifications the process asks for. Does nothing; override it to show them. It is
+    /// declared here, not left to the protocol's default, so a subclass override is dispatched.
+    open func notify(source: TerminalView, title: String, body: String) {
+    }
+
     open func scrolled(source: TerminalView, position: Double) {
         // noting
     }

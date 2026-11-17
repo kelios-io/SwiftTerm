@@ -2666,6 +2666,10 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
 // Default implementations for TerminalViewDelegate
 
 extension TerminalViewDelegate {    
+    public func notify (source: TerminalView, title: String, body: String)
+    {
+    }
+
     public func bell (source: TerminalView)
     {
         #if os(iOS)

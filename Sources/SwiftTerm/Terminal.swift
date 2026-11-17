@@ -1764,6 +1764,26 @@ open class Terminal {
         tdel?.notify(source: self, title: title, body: body)
     }
 
+    // iTerm2 notification: ESC ] 9 ; [message] BEL
+    // ConEmu also uses OSC 9 for numbered commands (9;1, 9;2, ...), so a message that starts with
+    // a number and a semicolon is left alone rather than shown as a notification.
+    @discardableResult
+    func oscPlainNotification(_ data: ArraySlice<UInt8>) -> Bool {
+        guard let text = String(bytes: data, encoding: .utf8) else {
+            return false
+        }
+        let digits = text.prefix(while: { $0.isASCII && $0.isNumber })
+        if !digits.isEmpty && (digits.count == text.count || text.dropFirst(digits.count).first == ";") {
+            return false
+        }
+        let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !body.isEmpty else {
+            return false
+        }
+        tdel?.notify(source: self, title: "", body: body)
+        return true
+    }
+
     @discardableResult
     func oscProgressReport(_ data: ArraySlice<UInt8>) -> Bool {
         guard let report = parseProgressReport(data) else {
