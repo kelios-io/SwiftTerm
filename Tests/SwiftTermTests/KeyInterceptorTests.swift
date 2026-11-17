@@ -63,3 +63,33 @@ struct KeyInterceptorTests {
 }
 #endif
 
+#if os(macOS)
+@MainActor
+struct ShiftEnterTests {
+    private func shiftReturn() -> NSEvent {
+        NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.shift], timestamp: 0,
+                         windowNumber: 0, context: nil, characters: "\r",
+                         charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36)!
+    }
+
+    private func bytesForShiftReturn(after setup: String) -> [UInt8] {
+        let view = TerminalView(frame: CGRect(x: 0, y: 0, width: 400, height: 300))
+        let recorder = SendRecorder()
+        view.terminalDelegate = recorder
+        if !setup.isEmpty { view.feed(text: setup) }
+        recorder.sent = []
+        view.keyDown(with: shiftReturn())
+        return recorder.sent.flatMap { $0 }
+    }
+
+    /// Without the kitty keyboard protocol, Shift+Return is indistinguishable from Return.
+    @Test func legacyShiftReturnIsPlainCarriageReturn() {
+        #expect(bytesForShiftReturn(after: "") == [0x0d])
+    }
+
+    /// With kitty "disambiguate" pushed (CSI > 1 u), Shift+Return is CSI 13 ; 2 u.
+    @Test func kittyShiftReturnIsDistinct() {
+        #expect(bytesForShiftReturn(after: "\u{1b}[>1u") == Array("\u{1b}[13;2u".utf8))
+    }
+}
+#endif
