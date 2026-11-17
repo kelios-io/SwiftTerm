@@ -8,6 +8,8 @@ This fork of SwiftTerm exists so Fermata can carry fixes and hooks that its Clau
 
 `dirty-rows-when-scrolled` fixes a redraw bug that produces exactly the "typed text not painted, cursor advances" symptom. It is described below and carries a regression test that fails without the fix.
 
+`fermata` is the branch Fermata depends on. It merges `line-height` and `dirty-rows-when-scrolled`, then adds one commit per change: font changes without a soft reset (`resetFont` goes through `processSizeChange`), `scrollerMode` and `showsScroller` on the Mac view, `keyEventInterceptor` on the Mac view, kitty keys from `doCommand(by:)` keeping their modifiers (Shift+Return becomes `CSI 13;2u`), `notify(source:title:body:)` on `TerminalViewDelegate` for OSC 777 and plain OSC 9, and `colorTransform` on both views. Each has tests; the suite is 393 tests.
+
 Tests run with `GITHUB_ACTIONS=true swift test`. Without that variable the package pulls in the benchmark target, which needs a system jemalloc that this machine does not have.
 
 ## The disappearing-text bug
